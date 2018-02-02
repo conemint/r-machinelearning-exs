@@ -1,0 +1,234 @@
+---
+title: "ex2:Part II: Regularized logistic regression"
+output: html_notebook
+---
+In this part of the exercise, you will implement regularized logistic regression to predict whether microchips from a fabrication plant passes quality assur- ance (QA). During QA, each microchip goes through various tests to ensure it is functioning correctly.
+
+Suppose you are the product manager of the factory and you have the test results for some microchips on two different tests. From these two tests, you would like to determine whether the microchips should be accepted or rejected. To help you make the decision, you have a dataset of test results on past microchips, from which you can build a logistic regression model.
+
+%  The first two columns contains the X values and the third column
+%  contains the label (y).
+
+### Bring in data and plot
+```{r}
+# remove all list
+rm(list = ls())
+
+library(ggplot2)
+# BRING IN DATA
+data2<-read.table("ex2data2.txt",sep=",",header = F)
+
+colnames(data2)<-c('t1','t2','decision')
+head(data2)
+
+X<-data2[,1:2]
+y<-data2[,3]
+m <- nrow(data2)
+n<-ncol(X)
+```
+
+
+### Visualizing the data
+```{r}
+# numeric to discrete factor for graphic
+data2$decisionf<-factor(data2$decision,levels=c(0,1),labels=c('y = 1', 'y = 0'))
+
+# Set color by cond
+p<-ggplot(data2, aes(x=t1, y=t2, color=decisionf, shape=decisionf)) + geom_point()+scale_shape_manual(values=c(1,2))+
+  xlab('Microchip Test 1')+
+  ylab('Microchip Test 2')
+p
+```
+
+
+### Part 1: Regularized Logistic Regression
+%  In this part, you are given a dataset with data points that are not
+%  linearly separable. However, you would still like to use logistic 
+%  regression to classify the data points. 
+%
+%  To do so, you introduce more features to use -- in particular, you add
+%  polynomial features to our data matrix (similar to polynomial
+%  regression).
+#### Add Polynomial Features /Feature mapping
+```{r}
+mapFeature<-function(X1, X2){
+  # % MAPFEATURE Feature mapping function to polynomial features
+  # %
+  # %   MAPFEATURE(X1, X2) maps the two input features
+  # %   to quadratic features used in the regularization exercise.
+  # %
+  # %   Returns a new feature array with more features, comprising of 
+  # %   X1, X2, X1.^2, X2.^2, X1*X2, X1*X2.^2, etc..
+  # %
+  # %   Inputs X1, X2 must be the same size
+  degree<-6
+  out<- array(data=1,dim=c(length(X1),1))
+  for(i in 1:degree){
+    for(j in 0:i){
+      out<-cbind(out,(X1^(i-j))*(X2^j))
+    }
+  }
+  return(out)
+}
+
+```
+
+Apply map feature on X1, X2:
+```{r}
+# % Note that mapFeature also adds a column of ones for us, so the intercept
+# % term is handled
+X = mapFeature(X[,1], X[,2])
+```
+#### Sigmoid function
+Recall that the logistic regres- sion hypothesis is defined as:
+$$h_{\theta}(x)=g(\theta^Tx)$$
+Where function g is the sigmoid function. The sigmoid function is defined as:
+
+$$g(z)=\frac{1}{1+e^{-z}}$$
+
+Define sigmoid function:
+```{r}
+# sigmoid function
+sigmoid<-function(z){
+  # %SIGMOID Compute sigmoid functoon
+  # %   J = SIGMOID(z) computes the sigmoid of z.
+  enez = exp(-z);
+  g = 1/(1+enez);
+  return(g)
+}
+```
+#### Cost functions
+```{r}
+costFunctionReg<-function(theta,X,y, lambda){
+  # %COSTFUNCTIONREG Compute cost and gradient for logistic regression with regularization
+  # %   J = COSTFUNCTIONREG(theta, X, y, lambda) computes the cost of using
+  # %   theta as the parameter for regularized logistic regression and the
+  # %   gradient of the cost w.r.t. to the parameters. 
+  
+  #  number of training examples
+  m<-length(y)
+  grad<-array(data=0,dim=c(dim(theta)))
+  
+  yhat<-sigmoid(X%*%theta)
+  # % theta1 to thetan
+  thetas<-theta[2:nrow(theta),]
+  reg = (lambda/(2*m))*sum(thetas^2)
+  J<-(1/m)*sum(-y*log(yhat)-(1-y)*log(1-yhat))+reg
+  
+  temp=theta
+  # grad[1]= (1/m)*sum((yhat-y)*X[,1])
+  # for(i in 2:nrow(theta)){
+  #   grad[i]= (1/m)*sum((yhat-y)*X[,i])+(lambda/(m))*theta[i,]
+  # }
+  grad = (1 /m)*(t(X)%*%(yhat-y))+(lambda/(m))*temp;
+  results<- list("J"=J,"grad"=grad)
+  return(results)
+}
+
+```
+Apply on data:
+```{r}
+# % Initialize fitting parameters
+initial_theta = array(data=0,dim=c(ncol(X),1))
+
+# % Set regularization parameter lambda to 1
+lambda <- 1
+
+# % Compute and display initial cost and gradient for regularized logistic
+# % regression
+cf.rs<-costFunctionReg(initial_theta, X, y, lambda)
+cost<-cf.rs$J
+grad<-cf.rs$grad
+```
+
+Cost at initial theta (zeros): `r cost`;
+
+Gradient at initial theta (zeros): `r grad`;
+
+### Part 2: Regularization and Accuracies
+
+%  In this part, you will get to try different values of lambda and 
+%  see how regularization affects the decision coundart
+%
+%  Try the following values of lambda (0, 1, 10, 100).
+
+First, define cost and grad functions to plug into `optim` function:
+```{r}
+# define fr and grr seperately from costFunction
+fr_cost<-function(theta_v,data1,lambda){
+  theta<-as.matrix(theta_v)
+  X<-data1[,1:2]
+  y<-data1[,3]
+  m <- nrow(data1)
+  n<-ncol(X)
+  # % Add intercept term to X
+  # ones<-array(data=1,dim=c(m,1))
+  # X<-cbind(ones,X)
+  # convert X to matrix for matrix cal in functions
+  X<-as.matrix(X)
+  X = mapFeature(X[,1], X[,2])
+  
+  cf.rs<-costFunctionReg(theta, X, y,lambda);
+  cost<-cf.rs$J
+  return(cost)
+}
+grr_grad<-function(theta_v,data1,lambda){
+  theta<-as.matrix(theta_v)
+  X<-as.matrix(data1[,1:2])
+  y<-data1[,3]
+  m <- nrow(data1)
+  n<-ncol(X)
+  # # % Add intercept term to X
+  # ones<-array(data=1,dim=c(m,1))
+  # X<-cbind(ones,X)
+  
+  X = mapFeature(X[,1], X[,2])
+  # convert X to matrix for matrix cal in functions
+  # X<-as.matrix(X)
+  cf.rs<-costFunctionReg(theta, X, y,lambda);
+  grad<-cf.rs$grad
+  return(grad)
+}
+```
+
+Then, with one set of lambda, run `optim` and then plot results:
+```{r}
+ # Initialize fitting parameters
+initial_theta = array(data=0,dim=c(ncol(X),1))
+
+ # Set regularization parameter lambda to 1 (you should vary this)
+lambda <- 1
+
+# % Optimize
+op<-optim(par=initial_theta, fn=fr_cost, gr=grr_grad, data1=data2,lambda=lambda,
+          method = "BFGS",control = list("maxit"=400))
+```
+
+Cost at theta found by `optim`: `r op$value`
+
+theta:
+
+`r op$par`
+
+
+#### Plot boundary
+Add boundary line from logistic regression to the first plot:
+```{r}
+# plot boundary
+# int<- - op$par[1]/op$par[3]
+# slp<- - op$par[2]/op$par[3]
+# p + geom_abline(intercept = int, slope = slp)
+```
+
+Train Accuracy:
+```{r}
+# % Compute accuracy on our training set
+
+  # % Add intercept term to X
+  X<-cbind(array(data=1,dim=c(nrow(data2),1)),as.matrix(data2[,1:2]))
+p = sigmoid(X%*%as.matrix(op$par))
+
+# fprintf('Train Accuracy: %f\n', mean(double(p == y)) * 100);
+
+```
+

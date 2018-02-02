@@ -1,0 +1,225 @@
+---
+title: "Programming Exercise 2: Logistic Regression"
+output: html_notebook
+---
+
+In this exercise, you will implement logistic regression and apply it to two different datasets.
+
+## Logistic Regression
+In this part of the exercise, you will build a logistic regression model to predict whether a student gets admitted into a university.
+
+You have historical data from previous applicants that you can use as a training set for logistic regression. For each training example, you have the applicant’s scores on two exams and the admissions decision.
+
+Your task is to build a classification model that estimates an applicant’s probability of admission based the scores from those two exams.
+
+### Bring in data and assign X,y
+```{r}
+# remove all list
+rm(list = ls())
+library(ggplot2)
+# BRING IN DATA
+data1<-read.table("ex2data1.txt",sep=",",header = F)
+colnames(data1)<-c('s1','s2','decision')
+# number of training examples
+
+head(data1)
+
+X<-data1[,1:2]
+y<-data1[,3]
+m <- nrow(data1)
+n<-ncol(X)
+```
+
+### Visualizing the data
+```{r}
+# numeric to discrete factor for graphic
+data1$decisionf<-factor(data1$decision,levels=c(0,1),labels=c('Not Admitted','Admitted'))
+
+# Set color by cond
+p<-ggplot(data1, aes(x=s1, y=s2, color=decisionf, shape=decisionf)) + geom_point()+scale_shape_manual(values=c(1,2))+
+  xlab("Exam 1 score")+
+  ylab("Exam 2 score")
+p
+```
+
+### Sigmoid function
+Recall that the logistic regres- sion hypothesis is defined as:
+$$h_{\theta}(x)=g(\theta^Tx)$$
+Where function g is the sigmoid function. The sigmoid function is defined as:
+
+$$g(z)=\frac{1}{1+e^{-z}}$$
+
+Define sigmoid function:
+```{r}
+# sigmoid function
+sigmoid<-function(z){
+  # %SIGMOID Compute sigmoid functoon
+  # %   J = SIGMOID(z) computes the sigmoid of z.
+  enez = exp(-z);
+  g = 1/(1+enez);
+  return(g)
+}
+```
+
+Test on sigmoid function:
+```{r}
+tst_seq<-seq(-500,500,by=5)
+# sigseq<-c()
+for(i in 1:length(tst_seq)){
+  sigval<-sigmoid(tst_seq[i])
+  if(i==1){
+    sigseq<-c(sigval)
+  }else{sigseq<-rbind(sigseq,sigval)}
+}
+tstplot<-as.data.frame(cbind(tst_seq,sigseq))
+colnames(tstplot)<-c("tst_seq","sig_vals")
+ggplot(tstplot, aes(x=tst_seq, y=sig_vals)) + geom_point()
+```
+### Cost function and gradient
+Recall that the cost function in logistic regression is
+$$J(\theta)=\frac{1}{m} \sum\limits_{i=1}^{m}{[-y^{(i)}log(h_{\theta }(x^{(i)}))- (1-y^{(i)} )log(1-h_{\theta }(x^{(i)} ))]} $$
+and the gradient of the cost is a vector of the same length as $\theta$ where the $j^{th}$ element (for j = 0,1,...,n) is defined as follows:
+$$\frac{\partial J(\theta)}{\partial \theta_{j}}=\frac{1}{m}\sum\limits_{i=1}^{m}{(h_{\theta}(x^{(i)})-y^{(i)})x_{j}^{(i)}}$$
+Note that while this gradient looks identical to the linear regression gra- dient, the formula is actually different because linear and logistic regression have different definitions of $h_{\theta }(x)$.
+
+Construct cost function as: 
+```{r}
+# Cost function and gradient
+costFunction<-function(theta,X,y){
+  # %COSTFUNCTION Compute cost and gradient for logistic regression
+  # %   J = COSTFUNCTION(theta, X, y) computes the cost of using theta as the
+  # %   parameter for logistic regression and the gradient of the cost
+  # %   w.r.t. to the parameters.
+  
+  #  number of training examples
+  m<-length(y)
+  yhat<-sigmoid(X%*%theta)
+  J<-(1/m)*sum(-y*log(yhat)-(1-y)*log(1-yhat))
+  
+  grad<-array(data=0,dim=c(dim(theta)))
+  
+  for(i in 1:length(theta)){
+    grad[i]= (1/m)*sum((yhat-y)*X[,i])
+  }
+  results<- list("J"=J,"grad"=grad)
+  return(results)
+}
+```
+
+Compute initial cost and gradient on data: 
+```{r}
+# Add intercept term to x 
+# % Add intercept term to X
+ones<-array(data=1,dim=c(m,1))
+X<-cbind(ones,X)
+# convert X to matrix for matrix cal in functions
+X<-as.matrix(X)
+
+# % Initialize fitting parameters
+initial_theta = array(data=0,dim=c(n+1,1))
+
+# % Compute and display initial cost and gradient
+cf.rs<-costFunction(initial_theta, X, y);
+cost<-cf.rs$J
+grad<-cf.rs$grad
+```
+
+Cost at initial theta (zeros): `r cost`;
+
+Gradient at initial theta (zeros): `r grad`;
+
+### Optimizing using `optim`
+
+In the previous assignment, optimal parameters of a linear re- gression model was found by implementing gradent descent. We wrote a cost function and calculated its gradient, then took a gradient descent step accordingly.
+
+In the original couse assignment, this oprimization was done using an Octave/- MATLAB built-in function called **fminunc**.
+
+Octave/MATLAB’s **fminunc** is an optimization solver that finds the min- imum of an unconstrained function. For logistic regression, you want to optimize the cost function $J(θ)$ with parameters $θ$.
+
+Now in **R**, we will try to use **optim**, a General-purpose Optimization function from *stats* package, to acomplish the same goal.
+```{r,eval=F}
+optim(par, fn, gr = NULL, ...,
+      method = c("Nelder-Mead", "BFGS", "CG", "L-BFGS-B", "SANN",
+                 "Brent"),
+      lower = -Inf, upper = Inf,
+      control = list(), hessian = FALSE)
+```
+
+
+      
+In Octave, fminunc is called as:
+
+```{r,eval=F}
+%  Set options for fminunc
+options = optimset('GradObj', 'on', 'MaxIter', 400);
+
+%  Run fminunc to obtain the optimal theta
+%  This function will return theta and the cost 
+[theta, cost] = ...
+	fminunc(@(t)(costFunction(t, X, y)), initial_theta, options);
+```
+
+	
+Now we use `optim` to mimic as:
+```{r, eval=F}
+optim(par, fr, grr, method = "BFGS",control = list("maxit"=400))
+```
+
+Wrap cost function and gradient function seperately. `optim` function takes in `fr`~ cost function, and `grr` ~ gradient function.
+Start from data1, easier to apply to `optim` as parameters. multiple is also workable.
+```{r}
+# define fr and grr seperately from costFunction
+fr_cost<-function(theta_v,data1){
+  theta<-as.matrix(theta_v)
+  X<-data1[,1:2]
+  y<-data1[,3]
+  m <- nrow(data1)
+  n<-ncol(X)
+  # % Add intercept term to X
+  ones<-array(data=1,dim=c(m,1))
+  X<-cbind(ones,X)
+  # convert X to matrix for matrix cal in functions
+  X<-as.matrix(X)
+  
+  cf.rs<-costFunction(theta, X, y);
+  cost<-cf.rs$J
+  return(cost)
+}
+grr_grad<-function(theta_v,data1){
+  theta<-as.matrix(theta_v)
+  X<-as.matrix(data1[,1:2])
+  y<-data1[,3]
+  m <- nrow(data1)
+  n<-ncol(X)
+  # % Add intercept term to X
+  ones<-array(data=1,dim=c(m,1))
+  X<-cbind(ones,X)
+  # convert X to matrix for matrix cal in functions
+  # X<-as.matrix(X)
+  cf.rs<-costFunction(theta, X, y);
+  grad<-cf.rs$grad
+  return(grad)
+}
+```
+
+Call optim functions
+```{r}
+op<-optim(par=c(0,0,0), fn=fr_cost, gr=grr_grad, data1=data1,
+          method = "BFGS",control = list("maxit"=400))
+```
+
+Cost at theta found by `optim`: `r op$value`
+
+theta:
+
+`r op$par`
+
+#### Plot boundary
+Add boundary line from logistic regression to the first plot:
+```{r}
+# plot boundary
+int<- - op$par[1]/op$par[3]
+slp<- - op$par[2]/op$par[3]
+p + geom_abline(intercept = int, slope = slp)
+```
+
