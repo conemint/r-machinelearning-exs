@@ -1,0 +1,203 @@
+---
+title: 'Programming Exercise 6: Support Vector Machines'
+author: "Min Z"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output:
+  html_document: default
+  html_notebook: default
+---
+
+## Introduction
+
+This exercise, builds a spam classifier using support vector machines (SVMs).
+
+## 1 Support Vector Machines
+In the first half of this exercise, you will be using support vector machines (SVMs) with various example 2D datasets. Experimenting with these datasets will help you gain an intuition of how SVMs work and how to use a Gaussian kernel with SVMs.
+
+### Example Dataset 1
+We will begin by with a 2D example dataset which can be separated by a linear boundary. 
+```{r}
+# remove all list
+rm(list = ls())
+library(R.matlab)
+library(ggplot2)
+library(dplyr)
+data6 <- readMat("ex6data1.mat")
+```
+
+Plot data:
+```{r}
+# numeric to discrete factor for graphic
+# data6$decisionf<-factor(data1$decision,levels=c(0,1),labels=c('Not Admitted','Admitted'))
+data6.df<-as.data.frame(cbind(data6$X,data6$y))
+colnames(data6.df)<-c("x1","x2","y")
+data6.df$y<-as.factor(data6.df$y)
+# Set color by cond
+p<-ggplot(data6.df, aes(x=x1, y=x2, color=y, shape=y)) + geom_point()+scale_shape_manual(values=c(1,2))
+p
+```
+
+#### experiment with svm function:
+Using svm() function from e1071 package, specify kernel ="linear" to separate the data with a linear boundary. The kernel function being: u'*v.
+```{r}
+library(e1071)
+
+## classification mode
+# default with factor response:
+model1 <- svm(y ~ ., data = data6.df,kernel ="linear")
+print(model1)
+summary(model1)
+# test with train data
+pred1 <- predict(model1, data6$X)
+
+```
+```{r}
+# Check accuracy:
+table(pred1, data6$y)
+# compute decision values and probabilities:
+pred1 <- predict(model1, data6$X, decision.values = TRUE)
+# print out first 5 dicision values
+attr(pred1, "decision.values")[1:5,]
+# visualize with plot.svm from e1072 package
+# plot(model1, data6.df)
+# flip x1, x2 to match with course guide
+plot(model1, data6.df,x2~x1)
+```
+
+#### Change C value
+cost of constraints violation (default: 1)—it is the ‘C’-constant of the regularization term in the Lagrange formulation.
+
+With a C = 1 as default, try other C values to see effect on result boundary line.
+```{r}
+
+model100 <- svm(y ~ ., data = data6.df,kernel ="linear",cost = 100)
+# plot(model100, data6.df)
+# flip x1, x2 to match with course guide
+plot(model100, data6.df,x2~x1)
+```
+### SVM with Gaussian Kernels
+
+In this part of the exercise, you will be using SVMs to do non-linear clas- sification. In particular, you will be using SVMs with Gaussian kernels on datasets that are not linearly separable.
+
+### Example Dataset 2
+
+The next part in ex6  will load and plot dataset 2
+```{r}
+data6.2 <- readMat("ex6data2.mat")
+```
+*Plot data:*
+```{r}
+# numeric to discrete factor for graphic
+# data6$decisionf<-factor(data1$decision,levels=c(0,1),labels=c('Not Admitted','Admitted'))
+data6.2.df<-as.data.frame(cbind(data6.2$X,data6.2$y))
+colnames(data6.2.df)<-c("x1","x2","y")
+data6.2.df$y<-as.factor(data6.2.df$y)
+# Set color by cond
+p<-ggplot(data6.2.df, aes(x=x1, y=x2, color=y, shape=y)) + geom_point()+scale_shape_manual(values=c(1,2))
+p
+```
+
+*Apply Gaussian Kernel SVM on data2:*
+In orignal ex6.m the gaussian kernel was defined as: sim = exp(- sum((x1-x2).^2)/(2*sigma^2));
+or ${\displaystyle K(\mathbf {x} ,\mathbf {x'} )=\exp \left(-{\frac {\|\mathbf {x} -\mathbf {x'} \|^{2}}{2\sigma ^{2}}}\right)}$
+
+An equivalent, but simpler, definition involves a parameter $\gamma ={\tfrac {1}{2\sigma ^{2}}}$:
+
+$${\displaystyle K(\mathbf {x} ,\mathbf {x'} )=\exp(-\gamma \|\mathbf {x} -\mathbf {x'} \|^{2})}$$
+Thus in svm() options, use kernel="radial". (Generally, Gaussian is a type of Radial basis function.)
+```{r}
+model2 <- svm(y ~ ., data = data6.2.df)
+summary(model2)
+# plot(model2, data6.2.df)
+# flip x1, x2 to match with course guide
+plot(model2, data6.2.df,x2~x1)
+```
+look at err
+```{r}
+pred <- predict(model2, data6.2$X)
+err<-mean(pred== data6.2$y);err
+```
+
+### Example Dataset 3
+In this part of the exercise, you will gain more practical skills on how to use a SVM with a Gaussian kernel. The next part of ex6 will load and display a third dataset. You will be using the SVM with the Gaussian kernel with this dataset.
+
+In the provided dataset, ex6data3.mat, you are given the variables X, y, Xval, yval.
+
+*Load data and convert to data frames*
+
+```{r}
+data6.3 <- readMat("ex6data3.mat")
+data.train<-as.data.frame(cbind(data6.3$X,data6.3$y))
+data.valid<-as.data.frame(cbind(data6.3$Xval,data6.3$yval))
+colnames(data.train)<-c("x1","x2","y")
+data.train$y<-as.factor(data.train$y)
+
+colnames(data.valid)<-c("x1","x2","y")
+data.valid$y<-as.factor(data.valid$y)
+```
+
+Visualize data
+```{r}
+# Set color by cond
+p<-ggplot(data.train, aes(x=x1, y=x2, color=y, shape=y)) + geom_point()+scale_shape_manual(values=c(1,2))
+p
+```
+
+The provided code in ex6.m trains the SVM classifier using the training set (X, y) using parameters loaded from dataset3Params.m.
+Your task is to use the cross validation set Xval, yval to determine the best C and σ parameter to use.
+
+For both C and σ, we suggest trying values in multiplicative steps (e.g., 0.01, 0.03, 0.1, 0.3, 1, 3, 10, 30). Loop through all combinations and choose the best one based on error term.
+
+Recall, that $\gamma ={\tfrac {1}{2\sigma ^{2}}}$, and $\gamma$ is defined through `gamma` option in svm() function. And that C correspond to the `cost` option in svm function.
+
+Compare the error for cross validation set based on percent accuracy: mean(pred== data6.3$yval)
+
+**The reason that Residual sum of squares is not used as error term for comparison here is that the prediction/y are not continuous; they are factors of 0 or 1. Thus it's only fair to compare the accuracy based on the percent of good predictions, not sum of residuals.**
+
+```{r}
+list<-c(0.01, 0.03, 0.1, 0.3, 1, 3, 10, 30)
+for(i in list){
+  Ct<-i
+  for(j in list){
+    sigmat<-j
+    gammat<-1/(2*sigmat^2)
+    # train svm model based on training data X,y
+    model.train <- svm(y ~ ., data = data.train,kernel ="radial",cost=Ct,gamma=gammat)
+    pred <- predict(model.train, data6.3$Xval)
+    m<-length(data6.3$yval)
+    # err<- (1/2*m)*sum((as.numeric(pred)-data6.3$yval)^2)
+    err<-mean(pred== data6.3$yval)
+    if(i==list[1] && j==list[1]){
+      C.list<-Ct
+      sigma.list<-sigmat
+      err.list<-err
+    }else{
+      C.list<-c(C.list,Ct)
+      sigma.list<-c(sigma.list,sigmat)
+      err.list<-c(err.list,err)
+    }
+  }
+}
+compare.df<-data.frame(C.list,sigma.list,err.list)
+```
+
+Examine all combination of parameters and err terms, and find the combination that leads to the smallest err.
+```{r}
+compare.df<-compare.df%>%arrange(desc(err.list))
+head(compare.df,6)
+```
+
+After you have determined the best C and σ parameters to use, you should modify the code in model, filling in the best parameters you found. For our best parameters, visualize the SVM  decision boundary.
+```{r}
+best_C<-compare.df[1,]$C.list
+best_sigma<-compare.df[1,]$sigma.list
+# best_sigma<-0.3
+best_gamma<-1/(2*best_sigma^2)
+model.train <- svm(y ~ ., data = data.train,kernel ="radial",cost=best_C,gamma=best_gamma)
+# plot(model.train, data.train)
+# flip x1, x2 to match with course guide
+plot(model.train, data.train,x2~x1)
+
+```
+
+

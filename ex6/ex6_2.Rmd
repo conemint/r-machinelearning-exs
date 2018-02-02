@@ -1,0 +1,239 @@
+---
+title: 'Programming Exercise 6: Support Vector Machines; Part II: Spam Classification'
+author: "Min Z"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output:
+  html_notebook: default
+  html_document: default
+---
+
+
+## 2 Spam Classification
+
+In this part of the exer- cise, you will use SVMs to build your own spam filter to to classify emails into spam and non-spam email.
+
+You will be training a classifier to classify whether a given email, x, is spam (y = 1) or non-spam (y = 0). In particular, you need to convert each email into a feature vector $x\in R^n$.
+
+### 2.1 Preprocessing Emails
+
+In `processEmail`, we will implement the following email prepro- cessing and normalization steps:
+
+* Lower-casing: The entire email is converted into lower case, so that captialization is ignored (e.g., IndIcaTE is treated the same as Indicate).
+
+* Stripping HTML: All HTML tags are removed from the emails. Many emails often come with HTML formatting; we remove all the HTML tags, so that only the content remains.
+
+* Normalizing URLs: All URLs are replaced with the text “httpaddr”.
+
+* Normalizing Email Addresses: All email addresses are replaced
+with the text “emailaddr”.
+
+* Normalizing Numbers: All numbers are replaced with the text
+“number”.
+
+* Normalizing Dollars: All dollar signs ($) are replaced with the text
+“dollar”.
+
+* Word Stemming: Words are reduced to their stemmed form. For ex- ample, “discount”, “discounts”, “discounted” and “discounting” are all replaced with “discount”. Sometimes, the Stemmer actually strips off additional characters from the end, so “include”, “includes”, “included”, and “including” are all replaced with “includ”.
+
+* Removal of non-words: Non-words and punctuation have been re- moved. All white spaces (tabs, newlines, spaces) have all been trimmed to a single space character.
+
+First, read in data: 
+```{r}
+# remove all list
+# rm(list = ls())
+library(R.matlab)
+library(ggplot2)
+library(dplyr)
+# string process
+library(stringr)
+# regular expresssion func regexprep
+library(pracma)
+# word stemming
+library(tm)
+fileName <-'emailSample1.txt'
+emailtxt<-readChar(fileName, file.info(fileName)$size)
+```
+
+Then, build vocabulary based on a vocab.txt file:
+
+```{r}
+getVocabList<-function(){
+  # %GETVOCABLIST reads the fixed vocabulary list in vocab.txt and returns a
+  # %char vector of the words
+  
+  # %% Read the fixed vocabulary list
+  fid=read.table("vocab.txt")
+  
+  # % For ease of implementation, we use a named list to map the strings => integers
+  # % In practice, you'll want to use some form of hashmap
+  # vocabList<-setNames(object=fid$V2,fid$V1)
+  return(as.character(fid$V2))
+  # first col of input file are indeces. If no indeces, then use rownames(fid) as names;
+  # in use: vocabList[["233"]]
+}
+vocabList<-getVocabList()
+```
+
+Now, build function to process input email-contents.
+
+PROCESSEMAIL preprocesses a the body of an email and returns a list of word_indices.
+```{r}
+processEmail<-function(email_contents){
+  # %   word_indices = PROCESSEMAIL(email_contents) preprocesses 
+  # %   the body of an email and returns a list of indices of the 
+  # %   words contained in the email. 
+  # ################# Preprocess Email###################
+  # STEP 1: remove \n\n s
+  email_contents<-str_replace_all(email_contents, "[\n\n]", " ")
+  email_contents<-str_replace_all(email_contents, "[\r]", " ")
+  # STEP 2: lower case
+  email_contents<-tolower(email_contents)
+  # STEP 3: Strip all HTML
+  # % Looks for any expression that starts with < and ends with > and replace
+  # % and does not have any < or > in the tag it with a space
+  email_contents<-regexprep(email_contents, '<[^<>]+>', ' ')
+  # STEP 4: Handle Numbers
+  # Look for one or more characters between 0-9
+  email_contents = regexprep(email_contents, '[0-9]+', 'number')
+  # STEP 5: Handle URLS
+  # % Look for strings starting with http:// or https://
+  email_contents = regexprep(email_contents, '(http|https)://[^\\s]*', 'httpaddr')
+  
+  # STEP 6: Handle Email Addresses
+  # % Look for strings with @ in the middle
+  email_contents = regexprep(email_contents, '[^\\s]+@[^\\s]+', 'emailaddr')
+  
+  # STEP 7: Handle $ sign
+  email_contents = regexprep(email_contents, '[$]+', 'dollar')
+
+  # STEP 8: REMOVE ALL PUNCT
+  email_contents = gsub("[[:punct:]]", " ", email_contents)
+  # ################# Tokenize Email###################
+  print(email_contents)
+  # STEP 9: SPLIT INTO WORDS
+  str.vec<-unlist(strsplit(email_contents," "))
+  
+  # STEP 10:  Remove any non alphanumeric characters
+  str.vec = regexprep(str.vec, '[^a-zA-Z0-9]', '');
+  # STEP 11: WORD STEMMING
+  str.vec<-stemDocument(str.vec)
+  # fix diff in stem func
+  str.vec<-str_replace_all(str.vec, "this", "thi")
+  print(str.vec)
+  # match on dict
+  
+  indx<-match(str.vec,vocabList)
+  
+  word_indices<-indx[!is.na(indx)]
+  # do emailFeatures()here 
+  indx<-match(vocabList,str.vec,nomatch=0)
+  features<-replace(indx,indx>0,1)
+  return.list<- list(word_indices,features)
+  return(return.list)
+}
+returned_list<-processEmail(emailtxt)
+word_indices<- unlist(returned_list[1])
+```
+
+Up to now, we have converted the email content into a vector of indeces: 
+word indices:
+```{r}
+print(word_indices)
+```
+
+### 2.2 Feature Extraction
+Now, you will convert each email into a vector of features in R^n. 
+ *emailFeatures() is defined within processEmail().*
+ 
+```{r}
+
+features<- unlist(returned_list[2])
+```
+
+### 2.3 Training SVM for Spam Classification
+
+In this section, you will train a linear classifier to determine if an email is Spam or Not-Spam.
+
+First, load the Spam Email dataset. You will have X, y in your dataset.
+```{r}
+spamTrain <- readMat("spamTrain.mat")
+
+```
+
+Train the linear classifier:
+```{r}
+library(e1071)
+
+# remove all 0 cols
+indtodel <- numeric(0)
+for(i in 1:dim(spamTrain$X)[2]){
+  Xcol<-spamTrain$X[,i]
+  if(max(Xcol)==0){
+    # if all 0, delete
+    indtodel<-c(indtodel,i)
+  }
+}
+X.cut<-spamTrain$X[,-indtodel]
+y.f<-as.factor(spamTrain$y)
+model1 <- svm(X.cut,y.f,kernel ="linear",cost = 0.1)
+print(model1)
+summary(model1)
+```
+
+Look at training accuracy:
+```{r}
+pred <- predict(model1, X.cut)
+accuracy<-mean(pred== y.f);accuracy
+```
+
+### 2.4 Test Spam Classification 
+
+
+After training the classifier, we can evaluate it on a test set. Load a test set in spamTest.mat
+```{r}
+spamTest <- readMat("spamTest.mat")
+Xt.cut<-spamTest$X[,-indtodel]
+
+yt.f<-as.factor(spamTest$y)
+
+pred.test <- predict(model1, Xt.cut)
+accuracy<-mean(pred.test== yt.f);accuracy
+```
+
+### 2.5 Top Predictors of Spam
+
+ Since the model we are training is a linear SVM, we can inspect the weights learned by the model to understand better how it is determining whether an email is spam or not. The following code finds the words with the highest weights in the classifier. Informally, the classifier 'thinks' that these words are the most likely indicators of spam.
+```{r}
+# % Sort the weights and obtin the vocabulary list
+# [weight, idx] = sort(model.w, 'descend');
+# vocabList = getVocabList();
+
+wt<-t(model1$SV)%*%model1$coefs
+for(i in 1:length(indtodel)){
+  if(i==1){
+    print(indtodel[i])
+    # addback.wt<-append(wt[1:(indtodel[1]-1)],0)%>%append(wt[indtodel[1]:length(wt)])
+    addback.wt<-append(wt,0,after=(indtodel[1]-1))
+  }else{
+    print(paste("else",indtodel[i]))
+    # addback.wt<-append(addback.wt[1:(indtodel[i]-1)],0)%>%append(addback.wt[indtodel[i]:n])
+    addback.wt<-append(addback.wt,0,after=(indtodel[i]-1))
+  }
+  n<-length(addback.wt)
+}
+wt.top15<-tail(sort(addback.wt),15)
+ind.cut<-match(wt.top15,addback.wt)
+vocabList[ind.cut]
+```
+
+### 2.6 Test on the email processed at the beginning of this section
+Test on the first email processed:
+```{r}
+Xtm<-t(as.matrix(features))
+Xt2.cut<-as.matrix(Xtm[-indtodel])
+pred.test2 <- predict(model1, t(Xt2.cut))
+print(as.numeric(pred.test2))
+```
+
+Predicts that it is a spam.
+

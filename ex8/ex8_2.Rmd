@@ -1,0 +1,56 @@
+---
+title: "Programming Exercise 8: Anomaly Detection and Recommender Systems, Part II"
+author: "Min Z"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output:
+  html_notebook: default
+  html_document: default
+---
+
+
+## 2 Recommender Systems
+
+In this part of the exercise, you will implement the collaborative filtering learning algorithm and apply it to a dataset of movie ratings.
+
+### 2.1 Movie ratings dataset
+
+This dataset consists of ratings on a scale of 1 to 5. The dataset has nu = 943 users, and nm = 1682 movies. 
+
+```{r}
+# remove all list
+rm(list = ls())
+```
+
+```{r}
+library(R.matlab)
+ex8_movies<-readMat("ex8_movies.mat")
+Y<-ex8_movies$Y
+R<-ex8_movies$R
+```
+
+Y is a 1682x943 matrix, containing ratings (1-5) of 1682 movies on  943 users
+
+R is a 1682x943 matrix, where R(i,j) = 1 if and only if user j gave a rating to movie i
+
+From the matrix, we can compute statistics like average rating.
+
+Average rating for movie 1 (Toy Story), where has been given a rate by user: 
+```{r}
+mean(Y[1,as.logical(R[1,])])
+```
+
+We can "visualize" the ratings matrix by:
+```{r}
+image(Y,xlab="movies",ylab="users",col=topo.colors(12))
+```
+
+
+### 2.2 Collaborative filtering learning algorithm
+Now, you will start implementing the collaborative filtering learning algo- rithm. You will start by implementing the cost function (without regulariza- tion).
+
+#### 2.2.1 Collaborative filtering cost function
+
+#### 2.2.2 Collaborative filtering gradient
+
+### 2.3 Learning movie recommendations
+#### 2.3.1 Recommendations

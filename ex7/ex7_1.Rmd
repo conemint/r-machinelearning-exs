@@ -1,0 +1,424 @@
+---
+title: 'Programming Exercise 7: K-means Clustering and Principal Component Analysis'
+author: "Min Z"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output:
+  html_notebook: default
+  html_document: default
+---
+
+
+
+## Introduction
+
+In this exercise, you will implement the K-means clustering algorithm and apply it to compress an image. 
+
+In the second part (ex7_2.rmd), you will use principal component analysis to find a low-dimensional representation of face images.
+
+## 1. K-means Clustering
+
+In this this exercise, you will implement the K-means algorithm and use it for image compression. You will first start on an example 2D dataset that will help you gain an intuition of how the K-means algorithm works. After that, you wil use the K-means algorithm for image compression by reducing the number of colors that occur in an image to only those that are most common in that image.
+
+### 1.1 Implementing K-means
+
+The K-means algorithm is a method to automatically cluster similar data examples together. Concretely, you are given a training set {x(1),...,x(m)} (where x(i) 2 Rn), and want to group the data into a few cohesive “clusters”. The intuition behind K-means is an iterative procedure that starts by guess- ing the initial centroids, and then refines this guess by repeatedly assigning examples to their closest centroids and then recomputing the centroids based on the assignments.
+
+The K-means algorithm is as follows:
+```
+# % Initialize centroids
+centroids = kMeansInitCentroids(X, K);
+for iter = 1:iterations
+    # % Cluster assignment step: Assign each data point to the
+    # % closest centroid. idx(i) corresponds to cˆ(i), the index
+    # % of the centroid assigned to example i
+    idx = findClosestCentroids(X, centroids);
+    # % Move centroid step: Compute means based on centroid
+    # % assignments
+    centroids = computeMeans(X, idx, K);
+end
+```
+
+```{r}
+# remove all list
+rm(list = ls())
+```
+
+Load an example dataset that we will be using
+```{r}
+library(R.matlab)
+ex7data2 <- readMat("ex7data2.mat")
+```
+
+#### 1.1.1 Finding closest centroids
+
+Write function to findClosestCentroids:
+
+%FINDCLOSESTCENTROIDS computes the centroid memberships for every example
+%   idx = FINDCLOSESTCENTROIDS (X, centroids) returns the closest centroids
+%   in idx for a dataset X where each row is a single example. idx = m x 1 
+%   vector of centroid assignments (i.e. each entry in range [1..K])
+
+```{r}
+findClosestCentroids<-function(X, centroids){
+  # set K
+  K=nrow(centroids)
+  # set size: return index of min dist in deach row to idx
+  m=nrow(X)
+  idx=array(0, dim=c(m,1))
+  # initial distance matrix;
+  distance = array(0, dim=c(m,K))
+  # calculate distance to each centroid
+  for (i in 1:K){
+    centroidi=centroids[i,]
+    # apply margin=1 to rows; sweep margin=2 extend corresponds to STATS
+    distance[,i]=apply(sweep(X,MARGIN=2,centroidi,`-`)^2,1,sum)
+  }
+  mindist=apply(distance,MARGIN = 1,min)
+  # return(distance)
+  for(i in 1:m){
+    # for each record, match index of mindist
+    idx[i]=match(mindist[i],distance[i,])
+    # console test
+    # if(i %in% 1:5){
+    #   print(mindist[i])
+    #   print(distance[i,])
+    #   print(idx[i])}
+  }
+  return(idx)
+  
+}
+```
+
+
+Use initial centroid, compute closest centroid for each record:
+```{r}
+# % Select an initial set of centroids
+K = 3 # 3 Centroids
+initial_centroids = matrix(data=c(3, 3, 6, 2, 8, 5),nrow=3,ncol=2,byrow=T)
+
+
+# % Find the closest centroids for the examples using the
+# % initial_centroids
+idx = findClosestCentroids(ex7data2$X, initial_centroids)
+```
+
+Closest centroids for the first 3 examples: `r idx[1:3]`
+
+Value Check: the closest centroids should be 1, 3, 2 respectively
+
+#### 1.1.2 Computing centroid means
+
+Write function to Compute means:
+
+$$\mu_k:=\frac{1}{|C_k|}\sum\limits_{i=C_k}x^{(i)}$$
+``` %COMPUTECENTROIDS returs the new centroids by computing the means of the ```
+```%data points assigned to each centroid.```
+```%   centroids = COMPUTECENTROIDS(X, idx, K) returns the new centroids by ```
+```%   computing the means of the data points assigned to each centroid. It is```
+```%   given a dataset X where each row is a single data point, a vector```
+```%   idx of centroid assignments (i.e. each entry in range [1..K]) for each```
+```%   example, and K, the number of centroids. You should return a matrix```
+```%   centroids, where each row of centroids is the mean of the data points```
+```%   assigned to it.```
+```{r}
+computeCentroids<-function(X, idx, K){
+  # dims of X
+  m=nrow(X)
+  n=ncol(X)
+  # dims of centroids to return
+  centroids=array(0,dim=c(K,n))
+  for(i in 1:K){
+    # for each centroid
+    # 1) find index of rows in X thats assigned to centroid i:
+    idxs = which(idx==i)
+    # total # of rows in X assigned to Ci:
+    ck=length(idxs)
+    # calculate means as the new centroid
+    centroids[i,]  = (1/ck)*apply(X[idxs,],2,sum);
+  }
+  return(centroids)
+}
+```
+
+Compute means based on the closest centroids found in the previous part.
+
+```{r}
+centroids = computeCentroids(ex7data2$X, idx, K)
+```
+
+Centroids computed after initial finding of closest centroids: 
+
+Centroids | data
+------------- | -------------
+Centroid 1|`r centroids[1,]`
+Centroid 2|`r centroids[2,]` 
+Centroid 3|`r centroids[3,]`
+
+**Value Check: the centroids should be:** <br />
+      [ 2.428301 3.157924 ] <br />
+      [ 5.813503 2.633656 ] <br />
+      [ 7.119387 3.616684 ] <br />
+      
+      
+### 1.2 K-means on example dataset
+
+After you have completed the two functions computeCentroids and findClosestCentroids, you have all the necessary pieces to run the kMeans algorithm. In this part, you will run the K-Means algorithm on the example dataset we have provided. 
+
+RUNKMEANS runs the K-Means algorithm on data matrix X, where each row of X is a single example
+``` Runs the K-Means algorithm on data matrix X, where each ```
+``` %   row of X is a single example. It uses initial_centroids used as the```
+``` %   initial centroids. max_iters specifies the total number of interactions ```
+``` %   of K-Means to execute. plot_progress is a true/false flag that ```
+``` %   indicates if the function should also plot its progress as the ```
+``` %   learning happens. This is set to false by default. runkMeans returns ```
+``` %   centroids, a Kxn matrix of the computed centroids and idx, a m x 1 ```
+``` %   vector of centroid assignments (i.e. each entry in range [1..K])```
+```{r}
+runkMeans<-function(X,initial_centroids,max_iters,plot_progress=FALSE){
+  # Initialize values
+  m=nrow(X)
+  n=ncol(X)
+  K=nrow(initial_centroids)
+  centroids = initial_centroids
+  # previous_centroids = centroids
+  allcentroids = matrix(data=as.numeric(t(initial_centroids)),nrow=1,byrow = T)
+  idx=array(0, dim=c(m,1))
+  
+  # Run K-means
+  for(i in 1:max_iters){
+    # For each example in X, assign it to the closest centroid
+    idx = findClosestCentroids(X, centroids);
+
+    # Given the memberships, compute new centroids
+    centroids = computeCentroids(X, idx, K);
+    # all record to historical centroids
+    if(plot_progress){
+      allcentroids=rbind(allcentroids,as.numeric(t(centroids))) 
+    }
+  }
+  # if(plot_progress){
+  #   # if plot_progress == TRUE, do the plot
+  #   movepath = as.data.frame(allcentroids)
+  # }
+  if(plot_progress){
+    results<- list("centroids"=centroids,"idx"=idx,"allcentroids"=allcentroids)
+  }else{
+    results<- list("centroids"=centroids,"idx"=idx)
+  }
+  
+  return(results)
+}
+```
+
+Now run on the sample dataset:
+```{r}
+# Settings for running K-Means
+K = 3
+max_iters = 10
+initial_centroids = matrix(data=c(3, 3, 6, 2, 8, 5),nrow=3,ncol=2,byrow=T)
+# Run K-Means algorithm. The 'true' at the end tells our function to plot the progress of K-Means
+returns = runkMeans(ex7data2$X, initial_centroids, max_iters, T)
+# centroids<-returns$centroids
+idx<-returns$idx
+
+```
+
+> Now that the function runkMeans are run with plot_progress =TRUE, we have all history of centroids flattened stored in returns$allcentroids. So we can plot the result grouping, as well as the moving path of the three group centroids.
+
+Plot data in groups after iterations:
+```{r}
+library(ggplot2)
+# Set color by cond
+data.df<-as.data.frame(ex7data2$X)
+group<-as.factor(idx)
+p<-ggplot() + geom_point(data=data.df, aes(x=V1, y=V2, color=group, shape=group))
+
+movepath = as.data.frame(returns$allcentroids)
+p <- p + geom_path(data=movepath,aes(x=V1, y=V2),colour="red")+
+  geom_point(data=movepath,aes(x=V1, y=V2)) + 
+  geom_path(data=movepath,aes(x=V3, y=V4),colour="darkgreen")+
+  geom_point(data=movepath,aes(x=V3, y=V4))+ 
+  geom_path(data=movepath,aes(x=V5, y=V6),colour="darkblue")+
+  geom_point(data=movepath,aes(x=V5, y=V6))
+p
+```
+
+
+
+### 1.3 Random initialization
+
+The initial assignments of centroids for the example dataset in this exercise were designed so that you will see the same figure as in Figure above. In practice, a good strategy for initializing the centroids is to select random examples from the training set.
+
+```% Initialize the centroids to be random examples```
+```% Randomly reorder the indices of examples```
+```randidx = randperm(size(X, 1));```
+```% Take the first K examples as centroids```
+```centroids = X(randidx(1:K), :);```
+
+```%KMEANSINITCENTROIDS This function initializes K centroids that are to be ```
+```%used in K-Means on the dataset X```
+```%   centroids = KMEANSINITCENTROIDS(X, K) returns K initial centroids to be```
+```%   used with the K-Means on the dataset X```
+
+```{r}
+kMeansInitCentroids<-function(X, K){
+  
+  n=ncol(X)
+  centroids = array(0, dim=c(K,n))
+  # Randomly reorder the indices of examples
+  # shuffle row-wise
+  reX = X[sample(nrow(X)),]
+  # Take the first K examples as centroids
+  centroids = reX[1:K,]
+  # centroids = X[sample(K),]
+  return(centroids)
+}
+```
+
+Use random inital centroids:
+
+```{r}
+# Settings for running K-Means
+X = ex7data2$X
+K = 3
+max_iters = 10
+initial_centroids_rand = kMeansInitCentroids(X, K)
+# Run K-Means algorithm. The 'true' at the end tells our function to plot the progress of K-Means
+returns_rand = runkMeans(X, initial_centroids_rand, max_iters, T)
+centroids_rand<-returns_rand$centroids
+idx_rand<-returns_rand$idx
+```
+
+Plot data in groups after iterations:
+```{r}
+# Set color by cond
+data.df<-as.data.frame(ex7data2$X)
+group<-as.factor(idx)
+p<-ggplot() + geom_point(data=data.df, aes(x=V1, y=V2, color=group, shape=group))
+
+movepath = as.data.frame(returns_rand$allcentroids)
+p <- p + geom_path(data=movepath,aes(x=V1, y=V2),colour="red")+
+  geom_point(data=movepath,aes(x=V1, y=V2)) + 
+  geom_path(data=movepath,aes(x=V3, y=V4),colour="darkgreen")+
+  geom_point(data=movepath,aes(x=V3, y=V4))+ 
+  geom_path(data=movepath,aes(x=V5, y=V6),colour="darkblue")+
+  geom_point(data=movepath,aes(x=V5, y=V6))
+p
+```
+### 1.3* Use kmeans function from stats package
+
+```{r}
+kmeans.rs<-kmeans(ex7data2$X,3,iter.max = 10,nstart = 3,algorithm = "Lloyd")
+# note that algorithm = "Lloyd" 
+# Lloyd's k-means algorithm is the first and simplest of all these clustering algorithms. Same as the one we have created above.
+# the default algorithm, by Hartigan and Wong (1979) is much smarter. Like MacQueen's algorithm (MacQueen, 1967), it updates the centroids any time a point is moved; it also makes clever (time-saving) choices in checking for the closest cluster. 
+
+# plot results
+
+group<-as.factor(kmeans.rs$cluster)
+p<-ggplot() + geom_point(data=data.df, aes(x=V1, y=V2, color=group, shape=group))
+
+centerstoplot = as.data.frame(kmeans.rs$centers)
+p <- p + 
+  geom_point(data=centerstoplot,aes(x=V1, y=V2)) 
+p
+```
+
+
+### 1.4 Image compression with K-means
+
+#### 1.4.1 K-Means Clustering on Pixels
+In this exercise, you will use K-Means to compress an image. To do this, you will first run K-Means on the colors of the pixels in the image and then you will map each pixel on to it's closest centroid.
+
+load data
+```{r}
+# load library png to read in png as array
+library(png)
+imgbirdread = readPNG("bird_small.png")
+
+# check with mat version of data. or if cannot read png
+# bird_small  <- readMat("bird_small.mat")
+# imgbird = bird_small$A
+```
+
+```This creates a three-dimensional matrix A whose first two indices identify a pixel position and whose last index represents red, green, or blue. For example, A(50, 33, 3) gives the blue intensity of the pixel at row 50 and column 33.```
+
+pre process data:
+```{r}
+# A = imgbird/ 255
+# % Divide by 255 so that all values are in the range 0 - 1
+A = imgbirdread
+# read png using readPNG, transformed to 0-1 already
+dimA = dim(A)
+# % Reshape the image into an Nx3 matrix where N = number of pixels.
+# % Each row will contain the Red, Green and Blue pixel values
+# % This gives us our dataset matrix X that we will use K-Means on.
+X = array(A,dim=c(dimA[1]*dimA[2],dimA[3]))
+```
+
+Run your K-Means algorithm on this data
+You should try different values of K and max_iters here
+Also, when using K-Means, it is important the initialize the centroids randomly. 
+```{r}
+K = 16
+max_iters = 10
+initial_centroidsimg = kMeansInitCentroids(X, K)
+
+```
+
+Run K-Means
+```{r}
+returns = runkMeans(X, initial_centroidsimg, max_iters, FALSE)
+centroidsimg<-returns$centroids
+idximg<-returns$idx
+```
+
+```{r}
+# recover scale of colors on  16 centroids found
+ C<-centroidsimg
+```
+
+```Show the first ten colors: ```
+ <span style="color:`r rgb(C[1,1],C[1,2],C[1,3])`">First</span>,
+ <span style="color:`r rgb(C[2,1],C[2,2],C[2,3])`">Second</span>,
+ <span style="color:`r rgb(C[3,1],C[3,2],C[3,3])`">Third</span>,
+ <span style="color:`r rgb(C[4,1],C[4,2],C[4,3])`">Fourth</span>,
+ <span style="color:`r rgb(C[5,1],C[5,2],C[5,3])`">Fifth</span>,
+ <span style="color:`r rgb(C[6,1],C[6,2],C[6,3])`">Sixth</span>,
+ <span style="color:`r rgb(C[7,1],C[7,2],C[7,3])`">Seventh</span>,
+ <span style="color:`r rgb(C[8,1],C[8,2],C[8,3])`">Eighth</span>,
+ <span style="color:`r rgb(C[9,1],C[9,2],C[9,3])`">Ninth</span>,
+ <span style="color:`r rgb(C[10,1],C[10,2],C[10,3])`">Tenth</span>,
+
+
+#### 1.4.2 Image Compression
+After finding the top K = 16 colors to represent the image, you can now
+assign each pixel position to its closest centroid using the findClosestCentroids function. This allows you to represent the original image using the centroid assignments of each pixel. 
+
+```{r}
+ # Find closest cluster members
+idx = findClosestCentroids(X, centroidsimg)
+```
+
+Essentially, now we have represented the image X as in terms of the indices in idx. 
+
+We can now recover the image from the indices (idx) by mapping each pixel (specified by it's index in idx) to the centroid value. Reshape the recovered image into proper dimensions
+
+```{r}
+X_recovered = centroidsimg[idx,]
+X_recovered = array(X_recovered, dim=c(dimA[1],dimA[2],dimA[3]))
+```
+
+Now, show comparison of orignal image:
+```{r,echo=FALSE,eval=FALSE}
+library(grid)
+grid.raster(img)
+```
+![A local image](bird_small.png)
+
+Compressed image:
+```{r,echo=FALSE,eval=FALSE}
+grid.raster(X_recovered)
+writePNG(X_recovered,target="compressed.png")
+```
+![A local image](compressed.png)
