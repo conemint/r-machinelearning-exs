@@ -1,0 +1,163 @@
+---
+title: "Programming Exercise 1: Linear Regression"
+output: html_notebook
+---
+
+## Part 1
+
+In this part of this exercise, you will implement linear regression with one variable to predict profits for a food truck. 
+
+The file ex1data1.txt contains the dataset for our linear regression prob- lem. The first column is the population of a city and the second column is the profit of a food truck in that city. A negative value for profit indicates a loss.
+
+```{r}
+
+library(ggplot2)
+library(dplyr)
+# SET WORK FOLDER
+setwd("~/Desktop/Coursera_MSLN/recreate_r/ex1")
+# BRING IN DATA
+data1<-read.table("ex1data1.txt",sep=",",header = F)
+colnames(data1)<-c('X','y')
+# number of training examples
+m = nrow(data1)
+```
+
+Check and plot data:
+```{r}
+class(data1)
+head(data1)
+# PLOT DATA
+plot(data1,xlab='Population of City in 10,000s',ylab='Profit in $10,000s')
+```
+
+Do linear regression using pre-defined function *lm {stats}*:
+```{r}
+#  Linear Regression using packages
+fit <- lm(y ~ X, data=data1)
+summary(fit) # show results
+# diagnostic plots 
+layout(matrix(c(1,2,3,4),2,2)) # optional 4 graphs/page 
+plot(fit)
+```
+
+Plot yhat and y: 
+```{r}
+# % Plot the linear fit
+pred.df<-cbind(data1$X,fitted(fit))%>%as.data.frame()
+colnames(pred.df)<-c("X","y")
+ggplot(pred.df, aes(x=X, y=y)) + 
+  geom_point()+ 
+  geom_point(data=data1, aes(x=X, y=y), color='red')+
+  xlab("Population of City in 10,000s") +
+  ylab("Predicted Profit in $10,000s") 
+
+```
+
+## Part 2
+
+Now build linear regression using gradien descend:
+
+First set up variables
+```{r}
+# SET UP LINEAR REGRESSION: ITERATION
+# Add a column of ones to x
+ones<-array(data=1,dim=c(m,1))
+X<-cbind(ones,data1$X)
+# initialize fitting parameters
+theta = array(data=0,dim=c(2,1))
+
+
+# Some gradient descent settings
+iterations = 1500
+alpha = 0.01
+```
+
+Then define functions to compute: cost function, and gradient descent for loops:
+
+cost function: 
+$$J(\theta)=\frac{1}{2m} \sum\limits_{i=1}^{m}{(h_{\theta }(x^{(i)} )- y^{(i)} )^2} $$
+The objective of linear regression is to minimize the cost function, where the hypothesis $h_{\theta }(x )$ is given by the linear model
+$$h_{\theta }(x)=\theta^Tx=\theta_{0}+\theta_{1}x$$
+```{r}
+computeCost<-function(X, y, theta){
+  # %COMPUTECOST Compute cost for linear regression
+  # %   J = COMPUTECOST(X, y, theta) computes the cost of using theta as the
+  # %   parameter for linear regression to fit the data points in X and y
+  
+  # % Initialize some useful values
+  #  number of training examples
+  m<-length(y)
+  yhat =X%*%theta
+  return(   (1/(2*m))*sum((yhat-y)^2) )
+}
+
+gradientDescent<-function(X,y,theta,alpha,num_iters){
+  # function [theta, J_history] = gradientDescent(X, y, theta, alpha, num_iters)
+  # %GRADIENTDESCENT Performs gradient descent to learn theta
+  # %   theta = GRADIENTDESENT(X, y, theta, alpha, num_iters) updates theta by 
+  # %   taking num_iters gradient steps with learning rate alpha
+  
+  # % Initialize some useful values
+  #  number of training examples
+  m<-length(y)
+  J_history <- array(data=0,dim=c(num_iters,1))
+  
+  for(iter in 1:num_iters){
+    
+    theta0 = theta[1,]
+    theta1 = theta[2,]
+    yhat = X%*%theta
+    theta0 = theta0 - (alpha /m)*sum(yhat-y)
+    theta1 = theta1 - (alpha /m)*sum((yhat-y)*X[,2])
+    theta = rbind(theta0,theta1)
+    #   % Save the cost J in every iteration    
+    J_history[iter,] = computeCost(X, y, theta);
+  }
+  
+  # return list [theta, J_history]
+  result <- list("theta" = theta, "J_history" = J_history)
+  return(result)
+}
+
+```
+
+Compute using functions just defined:
+```{r}
+
+# compute and display initial cost
+cost<-J(X,data1$y,theta)
+cost
+
+# % run gradient descent
+gd.result <- gradientDescent(X, data1$y, theta, alpha, iterations)
+
+```
+Print results for *theta* and plot result yhat(black) over x along side with y (red):
+```{r}
+# % print theta to screen
+print("Theta found by gradient descent: ")
+print(gd.result$theta)
+
+# % Plot the linear fit
+dataplot<-cbind(X[,2],X%*%gd.result$theta)%>%as.data.frame()
+colnames(dataplot)<-c("X","y")
+ggplot(dataplot, aes(x=X, y=y)) + 
+  geom_point()+ 
+  geom_point(data=data1, aes(x=X, y=y), color='red')+
+  xlab("Population of City in 10,000s") +
+  ylab("Predicted Profit in $10,000s") 
+
+```
+
+Use regression results and predict values:
+```{r}
+# % Predict values for population sizes of 35,000 and 70,000
+predict1 = c(1,3.5) %*%gd.result$theta
+print(paste("For population = 35,000, we predict a profit of %f\n",predict1*10000))
+predict2 = c(1,7) %*% gd.result$theta;
+print(paste("For population = 70,000, we predict a profit of %f\n",predict2*10000))
+
+```
+
+
+

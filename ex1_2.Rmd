@@ -1,0 +1,196 @@
+---
+title: "Programming Exercise 1: Linear regression with multiple variables"
+output: html_notebook
+---
+
+## Linear regression with multiple variables: with gradient descent
+In this part, you will implement linear regression with multiple variables to predict the prices of houses. 
+The file **ex1data2.txt** contains a training set of housing prices in Port- land, Oregon. The first column is the size of the house (in square feet), the second column is the number of bedrooms, and the third column is the price of the house.
+```{r}
+# BRING IN DATA
+data2<-read.table("ex1data2.txt",sep=",",header = F)
+colnames(data2)<-c('size','bds','price')
+# set data X, y and number of rows
+head(data2)
+
+X<-data2[,1:2]
+y<-data2[,3]
+m = nrow(data2)
+```
+
+### Feature Normalization
+Your task here is to:
+Subtract the mean value of each feature from the dataset.
+After subtracting the mean, additionally scale (divide) the feature values by their respective “standard deviations.”
+
+For data matrix $X$, in each col:
+$$X_{norm}[,i]=\frac{X[,i]-\mu[1,i]}{\sigma[1,i]} $$
+```{r}
+# feature normalize
+featureNormalize<-function(X){
+  # %FEATURENORMALIZE Normalizes the features in X 
+  # %   FEATURENORMALIZE(X) returns a normalized version of X where
+  # %   the mean value of each feature is 0 and the standard deviation
+  # %   is 1. This is often a good preprocessing step to do when
+  # %   working with learning algorithms.
+  mu<-array(data=0,dim=c(1,dim(X)[2]))
+  sigma<-array(data=0,dim=c(1,dim(X)[2]))
+  X_norm=X
+  
+  # for each col in x
+  for(i in 1:dim(X)[2]){
+    mu[1,i] = mean(X[,i])
+    sigma[1,i]=sd(X[,i])
+    # sigma_array = array(data=sigma[1,i],dim = dim(X)[1])
+    X_norm[,i]=(X[,i]-mu[1,i])/sigma[1,i]
+  }
+  # return list  [X_norm, mu, sigma]
+  result <- list("X_norm" = X_norm, "mu" = mu,"sigma"=sigma)
+  return(result)
+}
+```
+Normalize our data: 
+```{r}
+X_rslt<-featureNormalize(X)
+X<-X_rslt$X_norm
+mu<-X_rslt$mu
+sigma<-X_rslt$sigma
+
+print(mu)
+print(sigma)
+```
+Add intercept col to X, for gradient descent calculation sake
+```{r}
+# % Add intercept term to X
+ones<-array(data=1,dim=c(m,1))
+X<-cbind(ones,X)
+
+head(X)
+# convert X to matrix for matrix cal in functions
+X<-as.matrix(X)
+```
+
+### Compute cost function
+```{r}
+# Compute cost function
+computeCostMulti<-function(X, y, theta){
+  # %COMPUTECOSTMULTI Compute cost for linear regression with multiple variables
+  # %   J = COMPUTECOSTMULTI(X, y, theta) computes the cost of using theta as the
+  # %   parameter for linear regression to fit the data points in X and y
+  
+  # % Initialize some useful values
+  #  number of training examples
+  m<-length(y)
+  yhat =X%*%theta
+  return(   (1/(2*m))*sum((yhat-y)^2) )
+}
+```
+
+### Gradient descent function
+```{r}
+gradientDescentMulti<-function(X,y,theta,alpha,num_iters){
+  # function [theta, J_history] = gradientDescentMulti(X, y, theta, alpha, num_iters)
+  # %GRADIENTDESCENTMULTI Performs gradient descent to learn theta
+  # %   theta = GRADIENTDESCENTMULTI(x, y, theta, alpha, num_iters) updates theta by
+  # %   taking num_iters gradient steps with learning rate alpha
+  
+  # % Initialize some useful values
+  #  number of training examples
+  m<-length(y)
+  J_history <- array(data=0,dim=c(num_iters,1))
+  
+  for(iter in 1:num_iters){
+    
+    # theta0 = theta[1,]
+    # theta1 = theta[2,]
+    yhat = X%*%theta
+    for(i in 1:dim(theta)[1]){
+      theta[i,1]<-theta[i,1]-(alpha /m)*sum((yhat-y)*X[,i])
+    }
+    #   % Save the cost J in every iteration    
+    J_history[iter,] = computeCostMulti(X, y, theta);
+  }
+  
+  # return list [theta, J_history]
+  result <- list("theta" = theta, "J_history" = J_history)
+  return(result)
+}
+```
+
+Set up initial values and run gradient descent
+```{r}
+# % Choose some alpha value
+alpha <- 0.03;
+num_iters <- 400;
+
+# % Init Theta and Run Gradient Descent 
+theta = array(data=0,dim=c(3,1))
+
+grd_rslt <- gradientDescentMulti(X, y, theta, alpha, num_iters)
+theta<-grd_rslt$theta
+J_history<-grd_rslt$J_history
+```
+
+Plot the convergence graph
+```{r}
+conv_g<-cbind(seq(1:length(J_history)),J_history)
+plot(conv_g,xlab = "Number of iterations",ylab = "Cost J")
+```
+
+Display gradient descent's result
+```{r}
+print("Theta computed from gradient descent:")
+theta
+```
+
+Test: Estimate the price of a 1650 sq-ft, 3 br house
+```{r}
+tst = c(1,1650, 3);
+tst[2:3]=(tst[2:3]-mu)/sigma
+price = tst%*%theta
+price
+```
+The predicted price is `r price`
+
+## Linear regression with multiple variables: solve with Normal Equations
+
+The closed-form solution to linear regression is
+$$\theta=(X^TX)^{-1}X^T\vec{y}$$
+Now compute $\theta$ using data2:
+
+Write normalEqn function
+```{r}
+normalEqn<-function(X,y){
+  # %NORMALEQN Computes the closed-form solution to linear regression 
+  # %   NORMALEQN(X,y) computes the closed-form solution to linear 
+  # %   regression using the normal equations.
+  theta<-array(data=0,dim=c(dim(X)[2],1))
+  XTX=t(X)%*%X
+  invXTX = solve(XTX)
+  theta<-invXTX%*%t(X)%*%y
+}
+```
+
+Then compute $\theta$ for data2 using the function:
+```{r}
+# initialize values
+X<-data2[,1:2]
+y<-data2[,3]
+m = nrow(data2)
+# % Add intercept term to X
+ones<-array(data=1,dim=c(m,1))
+X<-as.matrix(cbind(ones,X))
+# % Calculate the parameters from the normal equation
+theta <- normalEqn(X, y);
+# % Display normal equation's result
+theta
+```
+
+Theta computed from the normal equations: `r theta`
+
+Estimate the price of a 1650 sq-ft, 3 br house
+```{r}
+price_ne <- sprintf("$ %3.2f", c(1, 1650, 3)%*%theta )
+```
+
+Predicted price of a 1650 sq-ft, 3 br house is `r price_ne`.
