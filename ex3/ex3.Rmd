@@ -1,0 +1,270 @@
+---
+title: 'Programming Exercise 3-4: Multi-class Classification and Neural Networks'
+output:
+  html_document: default
+  html_notebook: default
+---
+
+## Part I
+
+In this exercise, you will implement one-vs-all logistic regression and neural networks to recognize hand-written digits. 
+
+For this exercise, you will use logistic regression and neural networks to recognize handwritten digits (from 0 to 9). Automated handwritten digit recognition is widely used today - from recognizing zip codes (postal codes) on mail envelopes to recognizing amounts written on bank checks. 
+
+In the first part of the exercise, you will extend your previous implemen- tion of logistic regression and apply it to one-vs-all classification.
+
+You are given a data set in ex3data1.mat that contains 5000 training exam- ples of handwritten digits.
+
+### Part 1: Loading and Visualizing Data 
+```{r}
+# remove all list
+rm(list = ls())
+library(R.matlab)
+library(ggplot2)
+data3 <- readMat("ex3data1.mat")
+
+str(data3)
+```
+
+#### Visualize data
+There are 5000 training examples in ex3data1.mat, where each training example is a 20 pixel by 20 pixel grayscale image of the digit. Each pixel is represented by a floating point number indicating the grayscale intensity at that location. **The 20 by 20 grid of pixels is “unrolled” into a 400-dimensional vector.** Each of these training examples becomes a single row in our data matrix X. This gives us a 5000 by 400 matrix X where every row is a training example for a handwritten digit image.
+
+To graph it, first select a random number of rows to plot. Then roll back each row in matrix.
+```{r}
+sample<-sample(1:nrow(data3$X), 25, replace=F)
+```
+
+Keep the same sample for check afterwards.
+
+```{r}
+par(mfrow = c(1, 1))
+# par(mfrow = c(5, 5))
+for(i in sample){
+  t<-matrix(data3$X[i,],20,20,byrow=T)
+  t1<-t[,20:1]
+  image(t1)
+}
+```
+
+### Part2: Vectorizing Logistic Regression
+
+Define sigmoid function:
+```{r}
+# sigmoid function
+sigmoid<-function(z){
+  # %SIGMOID Compute sigmoid functoon
+  # %   J = SIGMOID(z) computes the sigmoid of z.
+  enez = exp(-z);
+  g = 1/(1+enez);
+  return(g)
+}
+```
+#### Cost functions
+```{r}
+costFunctionReg<-function(theta,X,y, lambda){
+  # %COSTFUNCTIONREG Compute cost and gradient for logistic regression with regularization
+  # %   J = COSTFUNCTIONREG(theta, X, y, lambda) computes the cost of using
+  # %   theta as the parameter for regularized logistic regression and the
+  # %   gradient of the cost w.r.t. to the parameters. 
+  
+  #  number of training examples
+  m<-length(y)
+  grad<-array(data=0,dim=c(dim(theta)))
+  
+  yhat<-sigmoid(X%*%theta)
+  # % theta1 to thetan
+  thetas<-theta[2:nrow(theta),]
+  reg = (lambda/(2*m))*sum(thetas^2)
+  J<-(1/m)*sum(-y*log(yhat)-(1-y)*log(1-yhat))+reg
+  temp=theta
+  grad = (1 /m)*(t(X)%*%(yhat-y))+(lambda/(m))*temp;
+  results<- list("J"=J,"grad"=grad)
+  return(results)
+}
+
+```
+
+#### One-vs-all Classification
+In this part of the exercise, you will implement one-vs-all classification by training multiple regularized logistic regression classifiers, one for each of the K classes in our dataset
+First, define cost and grad functions to plug into `optim` function:
+```{r}
+# define fr and grr seperately from costFunction
+fr_cost<-function(theta_v,X,y,lambda){
+  theta<-as.matrix(theta_v)
+
+  # convert X to matrix for matrix cal in functions
+  X<-as.matrix(X)
+  
+  cf.rs<-costFunctionReg(theta, X, y,lambda);
+  cost<-cf.rs$J
+  return(cost)
+}
+grr_grad<-function(theta_v,X,y,lambda){
+  theta<-as.matrix(theta_v)
+
+  X<-as.matrix(X)
+  cf.rs<-costFunctionReg(theta, X, y,lambda);
+  grad<-cf.rs$grad
+  return(grad)
+}
+```
+
+```{r}
+oneVsAll<-function(X, y, num_labels, lambda){
+  # %ONEVSALL trains multiple logistic regression classifiers and returns all
+  # %the classifiers in a matrix all_theta, where the i-th row of all_theta 
+  # %corresponds to the classifier for label i
+  # %   [all_theta] = ONEVSALL(X, y, num_labels, lambda) trains num_labels
+  # %   logisitc regression classifiers and returns each of these classifiers
+  # %   in a matrix all_theta, where the i-th row of all_theta corresponds 
+  # %   to the classifier for label i
+  
+  # % Some useful variables
+  m <- nrow(y)
+  n<-ncol(X)
+  # % Add intercept term to X
+  ones<-array(data=1,dim=c(m,1))
+  X<-cbind(ones,X)
+  # Initialize fitting parameters
+  initial_theta = array(data=0,dim=c(ncol(X),1))
+  for(c in 1:num_labels){
+    # % Optimize
+    op<-optim(par=initial_theta, fn=fr_cost, gr=grr_grad, X=X,y==c,lambda=lambda,
+              method = "BFGS",control = list("maxit"=50))
+    theta<-op$par
+    if(c==1){
+      all_theta<-t(theta)
+    }else{all_theta<-rbind(all_theta,t(theta))}
+  }
+  return(all_theta)
+}
+
+
+# function [all_theta] = oneVsAll(X, y, num_labels, lambda)
+
+
+
+# for c = 1:num_labels
+#   % Set Initial theta
+#   initial_theta = zeros(n + 1, 1);
+# 
+#   % Set options for fminunc
+#   options = optimset('GradObj', 'on', 'MaxIter', 50);
+# 
+#   % Run fmincg to obtain the optimal theta
+#   % This function will return theta and the cost 
+#   [theta] = ...
+#      fmincg (@(t)(lrCostFunction(t, X, (y == c), lambda)), ...
+#              initial_theta, options);
+#   all_theta(c,:) = theta';
+# end;
+```
+
+Set up and use
+```{r}
+num_labels = 10
+lambda = 0.1
+op<-oneVsAll(data3$X, data3$y, num_labels, lambda)
+
+```
+Predict based on $\theta_s$ from training
+```{r}
+predictOneVsAll<-function(all_theta, X){
+  # %PREDICT Predict the label for a trained one-vs-all classifier. The labels 
+  # %are in the range 1..K, where K = size(all_theta, 1). 
+  # %  p = PREDICTONEVSALL(all_theta, X) will return a vector of predictions
+  # %  for each example in the matrix X. Note that X contains the examples in
+  # %  rows. all_theta is a matrix where the i-th row is a trained logistic
+  # %  regression theta vector for the i-th class. You should set p to a vector
+  # %  of values from 1..K (e.g., p = [1; 3; 1; 2] predicts classes 1, 3, 1, 2
+  # %  for 4 examples) 
+  
+  m = nrow(X)
+  num_labels = nrow(all_theta)
+  
+  # % Add intercept term to X
+  ones<-array(data=1,dim=c(m,1))
+  X<-cbind(ones,X)
+  # z<-sweep(X,MARGIN=2,as.vector(all_theta),`*`)
+  yhat = sigmoid(X%*%t(all_theta))
+  # % prediction is the max position of each row
+  max<-apply(yhat,1,max)
+  p<-max.col(yhat, 'first')
+  return(p)
+}
+# function p = predictOneVsAll(all_theta, X)
+# %PREDICT Predict the label for a trained one-vs-all classifier. The labels 
+# %are in the range 1..K, where K = size(all_theta, 1). 
+# %  p = PREDICTONEVSALL(all_theta, X) will return a vector of predictions
+# %  for each example in the matrix X. Note that X contains the examples in
+# %  rows. all_theta is a matrix where the i-th row is a trained logistic
+# %  regression theta vector for the i-th class. You should set p to a vector
+# %  of values from 1..K (e.g., p = [1; 3; 1; 2] predicts classes 1, 3, 1, 2
+# %  for 4 examples) 
+# 
+# m = size(X, 1);
+# num_labels = size(all_theta, 1);
+# 
+# % You need to return the following variables correctly 
+# p = zeros(size(X, 1), 1);
+# 
+# % Add ones to the X data matrix
+# X = [ones(m, 1) X];
+# 
+# 
+# yhat = sigmoid(X*all_theta');
+```
+
+predict:
+```{r}
+
+pred <-predictOneVsAll(op, data3$X)
+```
+
+Training Set Accuracy (in percent): 
+
+```{r}
+mean(pred == data3$y) * 100
+```
+## Part II:
+
+In R, `mlogit` from package mlogit and `multinom` (built based on nnet) from package nnet solve Multinomial logit models. In other words, they are not directly ready to process Multi-class Classification.
+
+In this exercise, you will implement the neural networks from R packages and apply it to the task of hand-written digit recognition.
+
+Our neural network has 3 layers – an input layer, a hidden layer and an output layer. Since the images are of size 20 × 20, this gives us 400 input layer units. The parameters have dimensions that are sized for a neural network with 25 units in the second layer and 10 output units (corresponding to the 10 digit classes).
+
+```{r}
+# reform y as matrix of n*10, with 0/1 indicating which number it is
+y<-array(0,dim=c(nrow(data3$y),10))
+for (i in 1:nrow(data3$y)){
+  val<-data3$y[i]
+  y[i,val]<-1
+}
+```
+
+Now implement neural networks model using `nnet` from nnet library:
+Note that # weights =  $\sum{s_{j+1}*(s_j+1)}=25*401+10*26$
+```{r}
+library(nnet)
+nn1 <- nnet(data3$X, y, size = 25, rang = 0.1,MaxNWts=20000 ,decay = 5e-5, maxit = 200)
+```
+
+Check on the accuracy of results:
+```{r}
+pred<-predict(nn1, data3$X)
+ypred<-max.col(pred)
+test.cl <- function(true, pred) {
+  true <- (true)
+  cres <- (pred)
+  table(true, cres)
+}
+tst_tbl<-test.cl(data3$y, ypred)
+tst_tbl
+```
+
+Training Set Accuracy (in percent): 
+```{r}
+mean(ypred == data3$y) * 100
+```
+
